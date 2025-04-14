@@ -1,0 +1,31 @@
+[project]
+name = "agxplor"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Your Name",email = "you@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain[groq] (>=0.3.23,<0.4.0)",
+    "langgraph (>=0.3.29,<0.4.0)",
+    "langsmith (>=0.3.30,<0.4.0)",
+    "dotenv (>=0.9.9,<0.10.0)",
+    "faker (>=37.1.0,<38.0.0)",
+    "chromadb",
+    "sqlite-utils",
+    "tiktoken",
+    "langchain-community (>=0.3.21,<0.4.0)",
+    "sentence-transformers (>=4.0.2,<5.0.0)"
+]
+
+[tool]
+package-mode = false
+
+[tool.poetry.dependencies]
+python = ">=3.12,<4.0"
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
