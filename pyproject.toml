@@ -18,7 +18,8 @@ dependencies = [
     "tiktoken",
     "langchain-community (>=0.3.21,<0.4.0)",
     "sentence-transformers (>=4.0.2,<5.0.0)",
-    "langchain-huggingface (>=0.1.2,<0.2.0)"
+    "langchain-huggingface (>=0.1.2,<0.2.0)",
+    "streamlit (>=1.32.0,<2.0.0)"
 ]
 
 [tool]
