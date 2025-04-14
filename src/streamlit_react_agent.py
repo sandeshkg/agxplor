@@ -118,8 +118,14 @@ class DatabaseTools:
 def main():
     st.set_page_config(
         page_title="Loan Servicing Assistant",
-        page_icon="💬"
+        page_icon="💬",
+        layout="wide"  # Allow space for sidebar
     )
+    
+    # Add debug panel in sidebar
+    with st.sidebar:
+        st.title("Debug Panel")
+        show_thoughts = st.checkbox("Show Agent Thought Process", value=False)
     
     st.title("Loan Servicing Assistant")
     st.markdown("Welcome to the Loan Servicing Assistant! I can help you with loan details, payment history, and policy questions.")
@@ -260,6 +266,33 @@ def main():
                 with st.spinner("Thinking..."):
                     start_time = time.time()
                     response = st.session_state.agent_executor.invoke({"input": prompt})
+                    
+                    # Show thought process in sidebar if enabled
+                    if show_thoughts:
+                        with st.sidebar:
+                            st.markdown("### Current Thought Process")
+                            
+                            # Show full response
+                            if "output" in response:
+                                with st.expander("Final Response", expanded=True):
+                                    st.markdown(f"**Final Answer:** {response['output']}")
+                            
+                            # Show all intermediate steps
+                            if "intermediate_steps" in response:
+                                for step in response["intermediate_steps"]:
+                                    with st.expander(f"Step {response['intermediate_steps'].index(step) + 1}", expanded=True):
+                                        # Show the complete thought process
+                                        full_log = step[0].log
+                                        if "\nAction:" in full_log:
+                                            thought, rest = full_log.split("\nAction:", 1)
+                                            st.markdown(f"**Initial Thought:** {thought}")
+                                            st.markdown(f"**Action:** Action:{rest}")
+                                        else:
+                                            st.markdown(f"**Thought:** {full_log}")
+                                        
+                                        st.markdown(f"**Tool Used:** {step[0].tool}")
+                                        st.markdown(f"**Tool Input:** {step[0].tool_input}")
+                                        st.markdown(f"**Observation:** {step[1]}")
                     
                     # Check for errors
                     if response.get("intermediate_steps") and len(response["intermediate_steps"]) >= st.session_state.agent_executor.max_iterations:
