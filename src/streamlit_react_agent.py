@@ -115,13 +115,64 @@ class DatabaseTools:
             return history
         return "No payment history found"
 
+    def query_payment_balances(self, customer_id: str) -> str:
+        """Query detailed payment balances for a customer"""
+        try:
+            # Validate customer_id format
+            customer_id = str(customer_id).strip()
+            if not customer_id:
+                return "Invalid customer ID provided"
+            
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            query = """
+            SELECT 
+                c.name,
+                l.loan_id,
+                pb.total_loan_amount,
+                pb.total_payments_made,
+                pb.remaining_balance,
+                l.term,
+                ROUND(CAST(pb.total_payments_made AS FLOAT) / pb.total_loan_amount * 100, 2) as payment_progress
+            FROM Customers c
+            JOIN Loans l ON c.customer_id = l.customer_id
+            JOIN PaymentBalances pb ON l.loan_id = pb.loan_id
+            WHERE c.customer_id = ?
+            """
+            
+            cursor.execute(query, (customer_id,))
+            results = cursor.fetchall()
+            conn.close()
+            
+            if results:
+                response = "Payment Balance Details:\n"
+                for result in results:
+                    response += f"Customer: {result[0]}\n"
+                    response += f"Loan ID: {result[1]}\n"
+                    response += f"Total Loan Amount: ${result[2]:,.2f}\n"
+                    response += f"Total Payments Made: ${result[3]:,.2f}\n"
+                    response += f"Remaining Balance: ${result[4]:,.2f}\n"
+                    response += f"Loan Term: {result[5]} months\n"
+                    response += f"Payment Progress: {result[6]}%\n\n"
+                return response
+            return "No payment balance information found for this customer"
+        except Exception as e:
+            return f"Error accessing payment balance information: {str(e)}"
+
 def main():
     st.set_page_config(
         page_title="Loan Servicing Assistant",
         page_icon="💬",
-        layout="wide"  # Allow space for sidebar
+        layout="wide"
     )
     
+    # Initialize session state for messages if not exists
+    if 'messages' not in st.session_state:
+        st.session_state.messages = [
+            {"role": "assistant", "content": "I am your loan servicing assistant. To access your account information, I'll need your customer ID. How can I help you today?"}
+        ]
+
     # Add debug panel in sidebar
     with st.sidebar:
         st.title("Debug Panel")
@@ -131,7 +182,7 @@ def main():
     st.markdown("Welcome to the Loan Servicing Assistant! I can help you with loan details, payment history, and policy questions.")
 
     # Initialize session state for agent and memory if not exists
-    if 'agent_executor' not in st.session_state:
+    if 'agent_executor' not in st.session_state or 'memory' not in st.session_state:
         # Initialize LLM
         llm = ChatGroq(
             temperature=0.2,
@@ -160,6 +211,11 @@ def main():
                 name="PaymentHistory",
                 func=db_tools.query_payment_history,
                 description="Useful for getting a customer's payment history. Input should be a customer ID."
+            ),
+            Tool(
+                name="PaymentBalances",
+                func=db_tools.query_payment_balances,
+                description="Useful for getting detailed payment balance information including total loan amount, payments made, remaining balance, and payment progress. Input should be a customer ID."
             )
         ]
         
@@ -168,6 +224,13 @@ def main():
             memory_key="chat_history",
             return_messages=True
         )
+
+        # Restore chat history to memory if it exists
+        for message in st.session_state.messages:
+            if message["role"] == "assistant":
+                st.session_state.memory.chat_memory.add_ai_message(message["content"])
+            elif message["role"] == "user":
+                st.session_state.memory.chat_memory.add_user_message(message["content"])
 
         # Create agent with same prompt as before
         agent = create_react_agent(
@@ -238,16 +301,6 @@ def main():
             return_intermediate_steps=True
         )
 
-        # Store initial context in memory
-        st.session_state.memory.chat_memory.add_ai_message(
-            "I am your loan servicing assistant. To access your account information, I'll need your customer ID. How can I help you today?"
-        )
-        
-        # Initialize chat history
-        st.session_state.messages = [
-            {"role": "assistant", "content": "I am your loan servicing assistant. To access your account information, I'll need your customer ID. How can I help you today?"}
-        ]
-
     # Display chat history
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
@@ -255,7 +308,7 @@ def main():
 
     # Chat input
     if prompt := st.chat_input("Ask me anything about your loan..."):
-        # Add user message to chat history
+        # Add user message to chat history and memory
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.write(prompt)
