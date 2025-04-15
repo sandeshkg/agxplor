@@ -460,47 +460,89 @@ def create_response_compiler(llm):
     """Creates a function to compile final response from various nodes"""
     def compile_response(state: ConversationState) -> ConversationState:
         try:
+            # Prepare the raw response data
+            raw_response = ""
+            context = {
+                "query_type": state["query_type"]["query_type"],
+                "user_input": state["current_input"]
+            }
+            
             # Check if this is a follow-up question about required information
             if state["current_input"].lower().strip() in ["what info do you want", "what information do you need", "what do you need"]:
-                state["final_response"] = """To check your loan details or balance, I need your customer ID. 
-                This is a unique number assigned to your account. 
-                Once you provide your customer ID, I can tell you:
-                - Your total outstanding balance
+                raw_response = """Available Information:
+                - Total outstanding balance
                 - Payment history
                 - Loan details
                 
-                Please share your customer ID with me."""
-                return state
-
+                Requirements:
+                - Customer ID (unique number assigned to your account)"""
+                
+                context["response_type"] = "information_requirements"
+            
             # Regular response compilation logic
-            if state["query_type"]["query_type"] == "customer_data":
+            elif state["query_type"]["query_type"] == "customer_data":
                 if "error" in state["customer_data"]:
-                    state["final_response"] = state["customer_data"].get("message", 
-                        "I need your customer ID to look up that information. Could you please provide it?")
+                    raw_response = state["customer_data"].get("message", 
+                        "Customer ID required for information lookup.")
+                    context["response_type"] = "id_request"
                 else:
-                    response = ""
                     for key, value in state["customer_data"].items():
-                        response += value + "\n\n"
-                    state["final_response"] = response.strip()
+                        raw_response += value + "\n\n"
+                    context["response_type"] = "customer_data"
                     
             elif state["query_type"]["query_type"] == "policy":
                 policy_response = state["policy_data"].get("response")
                 if policy_response:
-                    state["final_response"] = policy_response.content if hasattr(policy_response, 'content') else str(policy_response)
+                    raw_response = policy_response.content if hasattr(policy_response, 'content') else str(policy_response)
+                    context["response_type"] = "policy_information"
                 else:
-                    state["final_response"] = "I couldn't find any relevant policy information. Could you please rephrase your question?"
+                    raw_response = "No relevant policy information found."
+                    context["response_type"] = "policy_not_found"
                 
             else:  # general query
-                state["final_response"] = """I can help you with:
-                - Looking up your loan details and current balance
-                - Checking your payment history
-                - Answering questions about our policies
-                
-                To access your account information, I'll need your customer ID. Please provide it, and I'll be happy to help."""
+                raw_response = """Services Available:
+                - Loan details and current balance lookup
+                - Payment history check
+                - Policy information"""
+                context["response_type"] = "capabilities"
+
+            # Format the response using LLM
+            prompt = """As a helpful loan servicing assistant, create a natural and friendly response based on the following information.
+            Keep the tone professional but warm. Include all relevant details but present them in a conversational way.
+
+            Context:
+            User Query Type: {query_type}
+            Response Type: {response_type}
+            User Input: {user_input}
+
+            Raw Information to Convey:
+            {raw_response}
+
+            Remember to:
+            1. Be concise but friendly
+            2. Maintain professionalism
+            3. If asking for a customer ID, explain why it's needed
+            4. If providing financial data, present it clearly
+            5. End with an appropriate follow-up or next steps if relevant"""
+
+            try:
+                llm_response = llm.invoke(
+                    prompt.format(
+                        query_type=context["query_type"],
+                        response_type=context["response_type"],
+                        user_input=context["user_input"],
+                        raw_response=raw_response
+                    )
+                )
+                state["final_response"] = llm_response.content if hasattr(llm_response, 'content') else str(llm_response)
+            except Exception as e:
+                print(f"LLM formatting error: {str(e)}")
+                # Fallback to raw response if LLM formatting fails
+                state["final_response"] = raw_response.strip()
             
             # Ensure we have a valid response
             if not state["final_response"]:
-                state["final_response"] = "I need more information to help you. Could you please provide more details?"
+                state["final_response"] = "I need more information to assist you properly. Could you please provide more details?"
             
         except Exception as e:
             print(f"Error in response compiler: {str(e)}")
