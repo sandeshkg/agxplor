@@ -511,9 +511,9 @@ def create_response_compiler(llm):
             Keep the tone professional but warm. Include all relevant details but present them in a conversational way.
 
             Context:
-            User Query Type: {query_type}
+            Response Data: {query_type}
             Response Type: {response_type}
-            User Input: {user_input}
+            User Query: {user_input}
 
             Raw Information to Convey:
             {raw_response}
@@ -523,7 +523,8 @@ def create_response_compiler(llm):
             2. Maintain professionalism
             3. If asking for a customer ID, explain why it's needed
             4. If providing financial data, present it clearly
-            5. End with an appropriate follow-up or next steps if relevant"""
+            5. End with an appropriate follow-up or next steps if relevant
+            6. Do not provide additional information than what the user asked"""
 
             try:
                 llm_response = llm.invoke(
